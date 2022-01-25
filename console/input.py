@@ -14,7 +14,7 @@ NUMERIC_INPUT_ERROR_MESSAGES = {
     'whole': "Must be a whole number"
 }
 
-LIST_SELECTION_ERROR_MESSAGES = {
+SELECTION_INPUT_ERROR_MESSAGES = {
     'invalid': "Invalid choice"
 }
 
@@ -25,6 +25,7 @@ BOOL_INPUT_ERROR_MESSAGES = {
 
 LIST_INPUT_ERROR_MESSAGES = {
     'invalid': "Invalid value",
+    'duplicate': "Value already entered"
 }
 
 __all__ = [
@@ -99,28 +100,31 @@ def numeric_input(prompt, minimum=None, maximum=None, allow_floats=True, recurri
 
 def selection_input(prompt, items, errors=None, item_format_method=lambda x: str(x)):
     if errors is None:
-        errors = LIST_SELECTION_ERROR_MESSAGES
+        errors = SELECTION_INPUT_ERROR_MESSAGES
     numeric_error_dict = {key: errors['invalid'] for key in NUMERIC_INPUT_ERROR_MESSAGES.keys()}
     list_string = '\n'.join([f"{i + 1}: {item_format_method(item)}" for i, item in enumerate(items)])
     print(list_string)
     choice = int(numeric_input(prompt, minimum=1, maximum=len(items), allow_floats=False, recurring=True, strip=True, errors=numeric_error_dict))
     return items[choice - 1]
 
-def list_input(prompt, prefix='{current}/{maximum}> ', validation_method=lambda x: empty(x, strip=True) is False, max_amount=-1, stop_codes=('stop', 'exit'), errors=None):
+def list_input(prompt, prefix='{current}/{maximum}> ', validation_method=lambda x: empty(x, strip=True) is False, max_amount=-1, stop_codes=('stop', 'exit'), allow_duplicates=True, errors=None):
     if errors is None:
-        errors = LIST_INPUT_ERRORS
+        errors = LIST_INPUT_ERROR_MESSAGES
     output_list = []
     done = False
     print(prompt)
     while not done:
-        raw_input = input(prefix.format(current=len(output_list), maximum=(max_amount if max_amount > 0 else '∞')))
+        raw_input = input(prefix.format(current=len(output_list) + 1, maximum=(max_amount if max_amount > 0 else '∞')))
         if raw_input.lower() in stop_codes:
             done = True
         else:
             if validation_method(raw_input):
-                output_list.append(raw_input)
-                if len(output_list) == max_amount:
-                    done = True
+                if allow_duplicates is False and raw_input in output_list:
+                  print(errors['duplicate'])
+                else:
+                  output_list.append(raw_input)
+                  if len(output_list) == max_amount:
+                      done = True
             else:
                 print(errors['invalid'])
     return output_list
@@ -154,14 +158,4 @@ def bool_input(prompt, yes=('y', 'yes'), no=('n', 'no'), recurring=True, errors=
                 else:
                     output_bool = fallback_to
                     done = True
-
-
-
-
-
-
-
-
-
-
-
+    return output_bool
