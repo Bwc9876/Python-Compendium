@@ -26,7 +26,8 @@ BOOL_INPUT_ERROR_MESSAGES = {
 __all__ = [
     'string_input',
     'numeric_input',
-    'list_selection_input'
+    'list_selection_input',
+    'bool_input'
 ]
 
 
