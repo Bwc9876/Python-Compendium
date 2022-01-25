@@ -18,6 +18,11 @@ LIST_SELECTION_ERROR_MESSAGES = {
     'invalid': "Invalid choice"
 }
 
+BOOL_INPUT_ERROR_MESSAGES = {
+    'empty': "Please enter a value",
+    'invalid': "Invalid choice"
+}
+
 __all__ = [
     'string_input',
     'numeric_input',
@@ -29,7 +34,7 @@ def empty(in_str, strip=True):
     return len((in_str.strip() if strip else in_str)) == 0
 
 
-def string_input(prompt, recurring=False, strip=True, errors=None):
+def string_input(prompt, recurring=True, strip=True, errors=None):
     if errors is None:
         errors = STRING_INPUT_ERROR_MESSAGES
     output_string = None
@@ -47,12 +52,12 @@ def string_input(prompt, recurring=False, strip=True, errors=None):
     return output_string
 
 
-def numeric_input(prompt, minimum=None, maximum=None, allow_floats=True, recurring=False, strip=True, errors=None):
+def numeric_input(prompt, minimum=None, maximum=None, allow_floats=True, recurring=True, strip=True, errors=None):
     if errors is None:
         errors = NUMERIC_INPUT_ERROR_MESSAGES
     output_number = None
     done = False
-    while recurring and not done:
+    while not done:
         raw_string = input(prompt)
         if empty(raw_string, strip=strip):
             if recurring:
@@ -96,7 +101,34 @@ def list_selection_input(prompt, items, errors=None, item_format_method=lambda x
     return items[choice - 1]
 
 
-
+def bool_input(prompt, yes=('y', 'yes'), no=('n', 'no'), recurring=True, errors=None, fallback_to=None):
+    if errors is None:
+        errors = BOOL_INPUT_ERROR_MESSAGES
+    output_bool = None
+    done = False
+    while not done:
+        raw_string = input(prompt).lower()
+        if empty(raw_string, strip=True):
+            if recurring:
+                print(errors['empty'])
+            else:
+                done = True
+        else:
+            if raw_string in yes:
+                done = True
+                output_bool = True
+            elif raw_string in no:
+                done = True
+                output_bool = False
+            else:
+                if fallback_to is None:
+                    if recurring:
+                        print(errors['invalid'])
+                    else:
+                        done = True
+                else:
+                    output_bool = fallback_to
+                    done = True
 
 
 
