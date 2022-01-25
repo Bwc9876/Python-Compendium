@@ -61,7 +61,7 @@ def color_text(in_str: str, style: ConsoleTextStyle):
 
 def progressbar(it, prefix="", size=60):
     """
-        Wraps a given iterator or generator to print a progress bar to the console
+        Wraps a given iterator or generator (use a cast to list) to print a progress bar to the console
 
         :param it: The iterator to apply the bar to
         :type it: iterable
