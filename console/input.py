@@ -2,6 +2,11 @@
     A set of functions that are helpful when accepting user input
 """
 
+from console.output import ConsoleTextStyle, ConsoleColors, color_text
+
+PROMPT_STYLE = ConsoleTextStyle(ConsoleColors.BLUE, True, False)
+ERROR_STYLE = ConsoleTextStyle(ConsoleColors.RED, True, False)
+
 STRING_INPUT_ERROR_MESSAGES = {
     'empty': "Please enter a value"
 }
@@ -33,11 +38,32 @@ __all__ = [
     'numeric_input',
     'selection_input',
     'list_input',
-    'bool_input'
+    'bool_input',
+    'PROMPT_STYLE',
+    'ERROR_STYLE'
 ]
 
 
-def empty(in_str: str, strip: bool=True) -> bool:
+def input_prompt(in_str):
+    return input(color_text(in_str, PROMPT_STYLE))
+
+
+def print_error(in_str):
+    print(color_text(in_str, ERROR_STYLE))
+
+
+def in_range(in_num, minimum, maximum):
+    if minimum is not None and maximum is not None:
+        return minimum <= in_num <= maximum
+    elif minimum is None and maximum is not None:
+        return in_num <= maximum
+    elif maximum is None and minimum is not None:
+        return in_num >= minimum
+    else:
+        return True
+
+
+def empty(in_str: str, strip: bool = True) -> bool:
     """
         Returns if the given string is empty, with or without stripping it
 
@@ -52,7 +78,7 @@ def empty(in_str: str, strip: bool=True) -> bool:
     return len((in_str.strip() if strip else in_str)) == 0
 
 
-def string_input(prompt: str, recurring: bool=True, errors: dict=None) -> str:
+def string_input(prompt: str, recurring: bool = True, errors: dict = None) -> str:
     """
         Asks the user for a non-empty string and then returns it
 
@@ -71,10 +97,10 @@ def string_input(prompt: str, recurring: bool=True, errors: dict=None) -> str:
     output_string = None
     done = False
     while not done:
-        raw_string = input(prompt)
+        raw_string = input_prompt(prompt)
         if empty(raw_string, strip=True):
             if recurring:
-                print(errors['empty'])
+                print_error(errors['empty'])
             else:
                 done = True
         else:
@@ -109,34 +135,34 @@ def numeric_input(prompt, minimum=None, maximum=None, allow_floats=True, recurri
     output_number = None
     done = False
     while not done:
-        raw_string = input(prompt)
+        raw_string = input_prompt(prompt)
         if empty(raw_string, strip=True):
             if recurring:
-                print(errors['empty'])
+                print_error(errors['empty'])
             else:
                 done = True
         else:
             try:
                 converted_number = float(raw_string)
-                if minimum <= converted_number <= maximum:
+                if in_range(converted_number, minimum, maximum):
                     if allow_floats is False and converted_number % 1 != 0:
-                        print(errors['whole'])
+                        print_error(errors['whole'])
                     else:
                         output_number = converted_number
                         done = True
                 else:
                     if recurring:
-                        print(errors['min-max'].format(minimum=minimum, maximum=maximum))
+                        print_error(errors['min-max'].format(minimum='-∞' if minimum is None else minimum, maximum='∞' if maximum is None else maximum))
                     else:
                         done = True
             except ValueError:
                 if recurring:
-                    print(errors['non-numeric'])
+                    print_error(errors['non-numeric'])
                 else:
                     done = True
             except OverflowError:
                 if recurring:
-                    print(errors['overflow'])
+                    print_error(errors['overflow'])
                 else:
                     done = True
     return output_number
@@ -148,10 +174,8 @@ def selection_input(prompt, items, errors=None, item_format_method=lambda x: str
 
         :param prompt: The prompt to ask the user
         :type prompt: str
-        :param items: The list of items the user can chose from
+        :param items: The list of items the user can choose from
         :type items: list[Any]
-        :param recurring: If the user enters an incorrect value, should the program keep asking them?
-        :type recurring: bool
         :param errors: The error messages to display under different conditions
         :type errors: dict
         :param item_format_method: A function to run on each list item before printing it
@@ -165,10 +189,13 @@ def selection_input(prompt, items, errors=None, item_format_method=lambda x: str
     numeric_error_dict = {key: errors['invalid'] for key in NUMERIC_INPUT_ERROR_MESSAGES.keys()}
     list_string = '\n'.join([f"{i + 1}: {item_format_method(item)}" for i, item in enumerate(items)])
     print(list_string)
-    choice = int(numeric_input(prompt, minimum=1, maximum=len(items), allow_floats=False, recurring=True, strip=True, errors=numeric_error_dict))
+    choice = int(numeric_input(prompt, minimum=1, maximum=len(items), allow_floats=False, recurring=True,
+                               errors=numeric_error_dict))
     return items[choice - 1]
 
-def list_input(prompt, prefix='{current}/{maximum}> ', validation_method=lambda x: empty(x, strip=True) is False, max_amount=-1, stop_codes=('stop', 'exit'), allow_duplicates=True, errors=None):
+
+def list_input(prompt, prefix='{current}/{maximum}> ', validation_method=lambda x: empty(x, strip=True) is False,
+               max_amount=-1, stop_codes=('stop', 'exit'), allow_duplicates=True, errors=None):
     """
         Asks the user for a limited or unlimited list of items
 
@@ -184,7 +211,7 @@ def list_input(prompt, prefix='{current}/{maximum}> ', validation_method=lambda 
         :type stop_codes: list[str]
         :param errors: The error messages to display under different conditions
         :type errors: dict
-        :param allow_dulicates: Whether to allow the user to enter a value more than once
+        :param allow_duplicates: Whether to allow the user to enter a value more than once
         :type allow_duplicates: bool
         :returns: A list of the values the user entered
         :rtype: list[str]
@@ -194,21 +221,21 @@ def list_input(prompt, prefix='{current}/{maximum}> ', validation_method=lambda 
         errors = LIST_INPUT_ERROR_MESSAGES
     output_list = []
     done = False
-    print(prompt)
+    print(color_text(prompt, PROMPT_STYLE))
     while not done:
-        raw_input = input(prefix.format(current=len(output_list) + 1, maximum=(max_amount if max_amount > 0 else '∞')))
+        raw_input = input_prompt(prefix.format(current=len(output_list) + 1, maximum=(max_amount if max_amount > 0 else '∞')))
         if raw_input.lower() in stop_codes:
             done = True
         else:
             if validation_method(raw_input):
                 if allow_duplicates is False and raw_input in output_list:
-                  print(errors['duplicate'])
+                    print_error(errors['duplicate'])
                 else:
-                  output_list.append(raw_input)
-                  if len(output_list) == max_amount:
-                      done = True
+                    output_list.append(raw_input)
+                    if len(output_list) == max_amount:
+                        done = True
             else:
-                print(errors['invalid'])
+                print_error(errors['invalid'])
     return output_list
 
 
@@ -237,10 +264,10 @@ def bool_input(prompt, yes=('y', 'yes'), no=('n', 'no'), recurring=True, errors=
     output_bool = None
     done = False
     while not done:
-        raw_string = input(prompt).lower()
+        raw_string = input_prompt(prompt).lower()
         if empty(raw_string, strip=True):
             if recurring:
-                print(errors['empty'])
+                print_error(errors['empty'])
             else:
                 done = True
         else:
@@ -253,7 +280,7 @@ def bool_input(prompt, yes=('y', 'yes'), no=('n', 'no'), recurring=True, errors=
             else:
                 if fallback_to is None:
                     if recurring:
-                        print(errors['invalid'])
+                        print_error(errors['invalid'])
                     else:
                         done = True
                 else:

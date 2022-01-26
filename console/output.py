@@ -1,5 +1,5 @@
 """
-    A set of functions that are helpful when output data
+    A set of functions that are helpful when outputting data
 """
 
 import sys
@@ -55,8 +55,10 @@ def color_text(in_str: str, style: ConsoleTextStyle):
         :param style: The style to apply
         :type style: ConsoleTextStyle
     """
-
-    return f"\033[{1 if style.bold else 0};{9 if style.high_intensity else 3}{style.color}m" + in_str + "\033[0m"
+    if style is None:
+        return in_str
+    else:
+        return f"\033[{1 if style.bold else 0};{9 if style.high_intensity else 3}{style.color}m" + in_str + "\033[0m"
 
 
 def progressbar(it, prefix="", size=60):
