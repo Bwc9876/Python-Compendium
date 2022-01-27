@@ -34,7 +34,7 @@ class InputResult(Enum):
         :type SUCCESS: int
         :cvar CANCEL: The user has cancelled the prompt
         :type CANCEL: int
-        :cvar ERROR: The user has entered an invalid value and recurring is False
+        :cvar ERROR: The user has entered an invalid value and ``recurring`` is False
         :type ERROR: int
     """
 
@@ -101,7 +101,7 @@ def in_range(in_num, minimum, maximum):
         :type minimum: float
         :param maximum: The maximum value of the range (inclusive)
         :type maximum: float
-        :returns: 'lt' if less than, 'gt' is greater than, and None if in
+        :returns: ``'lt'`` if less than, ``'gt'`` is greater than, and ``None`` if in
         :rtype: str
     """
 
@@ -138,9 +138,9 @@ class BaseInputOptions:
     """
         Represents options that apply to all inputs
 
-        :ivar errors: The messages tos how when the user enters invalid information
+        :ivar errors: The messages to show when the user enters invalid information
         :type errors: dict
-        :ivar styles: The :class ConsoleTextStyle:s to apply
+        :ivar styles: The :py:class:`ConsoleTextStyle` to apply
         :type styles: dict
         :ivar suffix: A string that is put directly after the prompt
         :type suffix: str
@@ -160,7 +160,7 @@ class BaseInputOptions:
 @dataclass
 class StringInputOptions(BaseInputOptions):
     """
-        Represents options for a :class StringInput:
+        Represents options for a :py:class:`StringInput`
 
         :ivar minimum_length: The minimum length that the input has to be (inclusive)
         :type minimum_length: int
@@ -176,7 +176,7 @@ class StringInputOptions(BaseInputOptions):
 @dataclass
 class NumericInputOptions(StringInputOptions):
     """
-        Represents options for a :class NumericInput:
+        Represents options for a :py:class:`NumericInput`
 
         :ivar minimum: The minimum value that can be entered
         :type minimum: float
@@ -195,7 +195,7 @@ class NumericInputOptions(StringInputOptions):
 @dataclass
 class BooleanInputOptions(StringInputOptions):
     """
-        Represents options for a :class BooleanInput:
+        Represents options for a :py:class:`BooleanInput`
 
         :ivar affirmative: The value the user needs to enter to say 'yes'
         :type affirmative: str
@@ -214,7 +214,7 @@ class BooleanInputOptions(StringInputOptions):
 @dataclass
 class SelectionInputOptions(BaseInputOptions):
     """
-        Represents options for a :class SelectionInput:
+        Represents options for a :py:class:`SelectionInput`
 
         :ivar item_formatter: A function that takes an item and formats it to display in the list, it gets the index of the item and the item itself and is expected to retunr the newly formatted string
         :type item_formatter: callable[int, object] -> str
