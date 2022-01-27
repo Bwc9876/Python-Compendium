@@ -1,3 +1,7 @@
+"""
+    A set of classes that cna be used to build interactive prompts
+"""
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -5,6 +9,12 @@ from console.output import ConsoleColors, ConsoleTextStyle, color_text
 
 
 class ValidationError(Exception):
+    """
+        Represents some sort of error in the data the user entered
+
+        :ivar message: The message to show the user
+        :type message: str
+    """
 
     def __init__(self, message):
         super(ValidationError, self).__init__()
@@ -15,6 +25,19 @@ class ValidationError(Exception):
 
 
 class InputResult(Enum):
+    """
+        Represents the different outcomes of a prompt
+
+        :cvar CONTINUE: Keep asking the user for input
+        :type CONTINUE: int
+        :cvar SUCCESS: The user has entered a valid value
+        :type SUCCESS: int
+        :cvar CANCEL: The user has cancelled the prompt
+        :type CANCEL: int
+        :cvar ERROR: The user has entered an invalid value and recurring is False
+        :type ERROR: int
+    """
+
     CONTINUE = 0
     SUCCESS = 1
     CANCEL = 2
@@ -69,6 +92,19 @@ SELECTION_DEFAULT_ERRORS = {
 # Utilities
 
 def in_range(in_num, minimum, maximum):
+    """
+        Sees if the entered value is within the given range
+
+        :param in_num: The number to check
+        :type in_num: float
+        :param minimum: The minimum value of the range (inclusive)
+        :type minimum: float
+        :param maximum: The maximum value of the range (inclusive)
+        :type maximum: float
+        :returns: 'lt' if less than, 'gt' is greater than, and None if in
+        :rtype: str
+    """
+
     if minimum is not None and in_num < minimum:
         return 'lt'
     elif maximum is not None and in_num > maximum:
@@ -77,7 +113,19 @@ def in_range(in_num, minimum, maximum):
         return None
 
 
-def first_upper(index, in_str):
+def default_list_format(index, in_str):
+    """
+        Makes the first character in the given string uppercase
+        Also shows the position of the item in the list (1-based)
+
+        :param index: The index of the item (0-based)
+        :type index: int
+        :param in_str: The string to format
+        :type in_str: str
+        :returns: The given string numbered and uppercased
+        :rtype: str
+    """
+
     raw_str = str(in_str)
     return (str(index + 1) + '. ') + (raw_str[0].upper() + raw_str[1:])
 
@@ -87,6 +135,21 @@ def first_upper(index, in_str):
 
 @dataclass
 class BaseInputOptions:
+    """
+        Represents options that apply to all inputs
+
+        :ivar errors: The messages tos how when the user enters invalid information
+        :type errors: dict
+        :ivar styles: The :class ConsoleTextStyle:s to apply
+        :type styles: dict
+        :ivar suffix: A string that is put directly after the prompt
+        :type suffix: str
+        :ivar recurring: If the user makes an error, should we keep prompting them?
+        :type recurring: bool
+        :ivar cancel_codes: If the user enters any of these values, the input will be cancelled
+        :type cancel_codes: tuple[str]
+    """
+
     errors: dict = field(default_factory=dict)
     styles: dict = field(default_factory=lambda: DEFAULT_STYLES)
     suffix: str = ": "
@@ -96,6 +159,15 @@ class BaseInputOptions:
 
 @dataclass
 class StringInputOptions(BaseInputOptions):
+    """
+        Represents options for a :class StringInput:
+
+        :ivar minimum_length: The minimum length that the input has to be (inclusive)
+        :type minimum_length: int
+        :ivar maximum_length: The maximum length that the input can to be (inclusive)
+        :type maximum_length: int
+    """
+
     minimum_length: int = 1
     maximum_length: int = None
     errors: dict = field(default_factory=lambda: STRING_DEFAULT_ERRORS)
@@ -103,6 +175,17 @@ class StringInputOptions(BaseInputOptions):
 
 @dataclass
 class NumericInputOptions(StringInputOptions):
+    """
+        Represents options for a :class NumericInput:
+
+        :ivar minimum: The minimum value that can be entered
+        :type minimum: float
+        :ivar maximum: The maximum value that can be entered
+        :type maximum: float
+        :ivar allow_floats: Whether decimal-point numbers can be entered
+        :type allow_floats: bool
+    """
+
     minimum: float = None
     maximum: float = None
     allow_floats: bool = True
@@ -111,6 +194,17 @@ class NumericInputOptions(StringInputOptions):
 
 @dataclass
 class BooleanInputOptions(StringInputOptions):
+    """
+        Represents options for a :class BooleanInput:
+
+        :ivar affirmative: The value the user needs to enter to say 'yes'
+        :type affirmative: str
+        :ivar negative: The value the user needs to enter to say 'no'
+        :type negative: str
+        :ivar hint_format: How the hint (ex: "({affirmative}/{negative})") will be displayed
+        :type hint_format: str
+    """
+
     affirmative: str = 'Y'
     negative: str = 'N'
     hint_format: str = ' ({affirmative}/{negative})'
@@ -119,22 +213,52 @@ class BooleanInputOptions(StringInputOptions):
 
 @dataclass
 class SelectionInputOptions(BaseInputOptions):
-    item_formatter: callable = field(default_factory=lambda:  first_upper)
+    """
+        Represents options for a :class SelectionInput:
+
+        :ivar item_formatter: A function that takes an item and formats it to display in the list, it gets the index of the item and the item itself and is expected to retunr the newly formatted string
+        :type item_formatter: callable[int, object] -> str
+    """
+
+    item_formatter: callable = field(default_factory=lambda:  default_list_format)
     errors: dict = field(default_factory=lambda:  SELECTION_DEFAULT_ERRORS)
     styles: dict = field(default_factory=lambda: DEFAULT_SELECTION_STYLES)
+
 
 # Inputs
 
 
 class BaseInput:
+    """
+        Used as a base for all other input types
+
+        :ivar options: the options for this input
+    """
+
     option_class = BaseInputOptions
 
     def __init__(self, options=None):
+        """
+            Initializes the input with the given options
+
+            :param options: The options to apply to the input (will use default if None)
+        """
+
+
         self.options = self.option_class() if options is None else options
         self._override_input = None
         self._override_print = None
 
     def __call__(self, prompt: str) -> tuple[InputResult, object]:
+        """
+            Prompt the user with the given prompt, then get the result and the input back
+
+            :param prompt: The prompt to ask the user
+            :type prompt: str
+            :returns: The result of the input (see :class InputResult:) and the value the user entered (or None is not applicable)
+            :rtype: tuple[InputResult, object]
+        """
+
         return self._invoke(prompt)
 
     def _show_prompt(self, prompt_string: str) -> str:
@@ -150,13 +274,13 @@ class BaseInput:
         else:
             self._override_print(error_message)
 
-    def _invalidate(self, message_code, **kwargs):
+    def _invalidate(self, message_code: str, **kwargs) -> None:
         raise ValidationError(self.options.errors.get(message_code, "Unknown Error").format(**kwargs))
 
     def _validate(self, raw_str: str) -> None:
         raise NotImplementedError(f"Validation not implemented for {self.__class__.__name__}")
 
-    def _sanitize(self, raw_str) -> object:
+    def _sanitize(self, raw_str: str) -> object:
         return raw_str
 
     def _main_loop(self, prompt: str):
@@ -181,13 +305,26 @@ class BaseInput:
             output_code, output = self._main_loop(prompt)
         return output_code, output
 
-    def setup_testing(self, input_func: callable, print_func: callable):
+    def setup_testing(self, input_func: callable, print_func: callable) -> None:
+        """
+            Sets up this input for testing instead of production-use
+
+            :param input_func: The function to run instead of input() when prompting the "user"
+            :type input_func: callable[str] -> str
+            :param print_func: The function to run instead of print() when outputting to the "user"
+            :type print_func: callable[str] -> None
+        """
+
         self._override_input = input_func
         self._override_print = print_func
         self.options.recurring = False
 
 
 class StringInput(BaseInput):
+    """
+        Used to prompt the user for a string
+    """
+
     option_class = StringInputOptions
     options: StringInputOptions = None
 
@@ -206,6 +343,10 @@ class StringInput(BaseInput):
 
 
 class NumericInput(StringInput):
+    """
+        Used to prompt the user for a numerical value
+    """
+
     option_class = NumericInputOptions
     options: NumericInputOptions = None
 
@@ -234,6 +375,10 @@ class NumericInput(StringInput):
 
 
 class BooleanInput(StringInput):
+    """
+        Used to prompt the user for a boolean (usually a yes or no question)
+    """
+
     option_class = BooleanInputOptions
     options: BooleanInputOptions = None
 
@@ -255,16 +400,37 @@ class BooleanInput(StringInput):
 
 
 class SelectionInput:
+    """
+        Used to have the user select from a list of values
+    """
+
     option_class = SelectionInputOptions
     options: SelectionInputOptions = None
 
     def __init__(self, options):
+        """
+            Initializes the input with the given options
+
+            :param options: The options to apply to the input (will use default if None)
+        """
+
         self.options = self.option_class() if options is None else options
         self._override_input = None
         self._override_print = None
         self._test_mode = False
 
     def __call__(self, prompt: str, choices: list[object]):
+        """
+            Prompt the user with the given prompt, then get the result and the input back
+
+            :param prompt: The prompt to ask the user
+            :type prompt: str
+            :param choices: The list the user can select from
+            :type choices: list[object]
+            :returns: The result of the input (see :class InputResult:) and the value the user entered (or None is not applicable)
+            :rtype: tuple[InputResult, object] 
+        """
+
         return self._invoke(prompt, choices)
 
     def _show_list(self, items: list[object]) -> str:
@@ -272,7 +438,7 @@ class SelectionInput:
         if self._override_print is None:
             return print(color_text(output_string, self.options.styles.get('list')))
         else:
-            return self._override_input(output_string)
+            return self._override_print(output_string)
 
     def _generate_numeric_options(self, list_length: int):
         errors = {key: SELECTION_DEFAULT_ERRORS['invalid'] for key in NUMERIC_DEFAULT_ERRORS if key != 'empty'}
@@ -291,6 +457,15 @@ class SelectionInput:
         return result, selection - 1
 
     def setup_testing(self, input_func: callable, print_func: callable):
+        """
+            Sets up this input for testing instead of production-use
+
+            :param input_func: The function to run instead of input() when prompting the "user"
+            :type input_func: callable[str] -> str
+            :param print_func: The function to run instead of print() when outputting to the "user"
+            :type print_func: callable[str] -> None
+        """
+
         self._override_input = input_func
         self._override_print = print_func
         self.options.recurring = False
