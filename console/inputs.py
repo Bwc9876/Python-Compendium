@@ -1,5 +1,5 @@
 """
-    A set of classes that cna be used to build interactive prompts
+    A set of classes that can be used to build interactive prompts
 """
 
 from dataclasses import dataclass, field
@@ -113,7 +113,7 @@ def in_range(in_num, minimum, maximum):
         return None
 
 
-def default_list_format(index, in_str):
+def default_list_format(index: int, in_str: object) -> str:
     """
         Makes the first character in the given string uppercase
         Also shows the position of the item in the list (1-based)
@@ -121,8 +121,8 @@ def default_list_format(index, in_str):
         :param index: The index of the item (0-based)
         :type index: int
         :param in_str: The string to format
-        :type in_str: str
-        :returns: The given string numbered and uppercased
+        :type in_str: object
+        :returns: The given string numbered and with the first character in uppercase
         :rtype: str
     """
 
@@ -268,7 +268,7 @@ class BaseInput:
         else:
             return self._override_input(prompt_string)
 
-    def _show_error(self, error_message: str) -> str:
+    def _show_error(self, error_message: str) -> None:
         if self._override_print is None:
             print(color_text(error_message, self.options.styles.get('error')))
         else:
@@ -436,7 +436,7 @@ class SelectionInput:
     def _show_list(self, items: list[object]) -> str:
         output_string = '\n'.join([self.options.item_formatter(index, item) for index, item in enumerate(items)])
         if self._override_print is None:
-            return print(color_text(output_string, self.options.styles.get('list')))
+            print(color_text(output_string, self.options.styles.get('list')))
         else:
             return self._override_print(output_string)
 
@@ -453,6 +453,7 @@ class SelectionInput:
         if self._test_mode:
             numeric_input.setup_testing(self._override_input, self._override_print)
         self._show_list(choices)
+        selection: int
         result, selection = numeric_input(prompt)
         return result, selection - 1
 
