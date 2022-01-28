@@ -1,21 +1,23 @@
 """
     A set of functions that are helpful when outputting data
 """
+from __future__ import annotations
 
 import sys
-from enum import Enum
+from enum import IntEnum
 from dataclasses import dataclass
 
 
-class ConsoleColorMode(Enum):
+class ConsoleColorMode(IntEnum):
     FOUR_BIT = 0
     EIGHT_BIT = 1
     RGB = 2
 
-COLOR_MODE = ConsoleColorMode.EIGHT_BIT
+
+COLOR_MODE = ConsoleColorMode.FOUR_BIT
 
 
-class ConsoleColors(Enum):
+class FourBitConsoleColors(IntEnum):
     """
         Use this static class to select colors in :class:ConsoleTextStyle
     """
@@ -28,7 +30,6 @@ class ConsoleColors(Enum):
     PURPLE = 5
     CYAN = 6
     WHITE = 7
-
 
 
 @dataclass
@@ -44,47 +45,52 @@ class ConsoleTextStyle:
         :type high_itensity: bool
     """
 
-    fg_color: int|tuple[int]
-    bg_color: int|tuple[int]
+    fg_color: int | tuple[int] = None
+    bg_color: int | tuple[int] = None
     bold: bool = False
     underline: bool = False
     overline: bool = False
-    invert: bool = False
     blink: bool = False
-    high_intensity = False
+    high_intensity: bool = False
 
     def get_flags(self):
-        return (self.bold, self.underline, self.overline, self.invert, self.blink)
+        return self.bold, self.underline, self.overline, self.blink
 
 
 flag_codes = (
     (1, None),
     (4, 24),
     (53, 55),
-    (7, 27),
     (5, 25),
 )
+
 
 # \033[color;bg;flagsmMESSAGE\033[0m
 
 
 def handle_flags(style):
     flags = style.get_flags()
-    flag_String = ""
+    flag_string = ""
     for flag, possible in enumerate(flag_codes):
         if flags[flag] is True and possible[0] is not None:
             flag_string += f"{possible[0]};"
         elif flags[flag] is False and possible[1] is not None:
             flag_string += f"{possible[1]};"
-    return flag_string
-            
-def handle_color(color_type, style, mode):
-    color = style.fg_Color if color_type == 0 else style.bg_color
-    if style.color is None:
+    return flag_string[:-1]
+
+
+def handle_color(color_type, style: ConsoleTextStyle, mode):
+    color = style.fg_color if color_type == 0 else style.bg_color
+    if color is None:
         return ""
     else:
         if mode == ConsoleColorMode.RGB:
-            return str(38 id color_type == 0 else 48) + f";2;{color[0]};{color[1]};{color[2]};"
+            return str(38 if color_type == 0 else 48) + f";2;{color[0]};{color[1]};{color[2]};"
+        elif mode == ConsoleColorMode.FOUR_BIT:
+            return str((10 if color_type == 1 else 0) + (60 if style.high_intensity else 0) + int(color) + 30) + ";"
+        elif mode == ConsoleColorMode.EIGHT_BIT:
+            return str(38 if color_type == 0 else 48) + ';5;' + str(color) + ";"
+
 
 def color_text(in_str: str, style: ConsoleTextStyle, reset=True, override_color_mode=None):
     """
@@ -102,8 +108,16 @@ def color_text(in_str: str, style: ConsoleTextStyle, reset=True, override_color_
             color_mode = COLOR_MODE
         else:
             color_mode = override_color_mode
-        command_sequence = "\033["
+        start_sequence = "\033["
+        fg_color_sequence = handle_color(0, style, color_mode)
+        bg_color_sequence = handle_color(1, style, color_mode)
+        flag_sequence = handle_flags(style)
+        end_sequence = '\033[0m' if reset else ""
+        return start_sequence + fg_color_sequence + bg_color_sequence + flag_sequence + 'm' + in_str + end_sequence
 
+
+def reset_format():
+    print('\033[0m', end='\r')
 
 
 def progressbar(it, prefix="", size=60):
@@ -121,15 +135,13 @@ def progressbar(it, prefix="", size=60):
     count = len(it)
 
     def show(j):
-        x = int(size*j/count)
-        sys.stdout.write("%s[%s%s] %i/%i\r" % (prefix, "#"*x, "."*(size-x), j, count))
+        x = int(size * j / count)
+        sys.stdout.write("%s[%s%s] %i/%i\r" % (prefix, "#" * x, "." * (size - x), j, count))
         sys.stdout.flush()
+
     show(0)
     for i, item in enumerate(it):
         yield item
-        show(i+1)
+        show(i + 1)
     sys.stdout.write("\n")
     sys.stdout.flush()
-
-
-

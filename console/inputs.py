@@ -5,7 +5,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
-from console.output import ConsoleColors, ConsoleTextStyle, color_text
+from console.output import FourBitConsoleColors, ConsoleTextStyle, color_text
 
 
 class ValidationError(Exception):
@@ -48,12 +48,12 @@ class InputResult(Enum):
 
 
 DEFAULT_STYLES = {
-    'prompt': ConsoleTextStyle(ConsoleColors.BLUE, True, False),
-    'error': ConsoleTextStyle(ConsoleColors.RED, True, False)
+    'prompt': ConsoleTextStyle(FourBitConsoleColors.BLUE, bold=True),
+    'error': ConsoleTextStyle(FourBitConsoleColors.RED, bold=True)
 }
 
 DEFAULT_SELECTION_STYLES = {
-    'list': ConsoleTextStyle(ConsoleColors.BLUE, False, False)
+    'list': ConsoleTextStyle(FourBitConsoleColors.BLUE, bold=False)
 }
 DEFAULT_SELECTION_STYLES.update(DEFAULT_STYLES)
 
@@ -243,7 +243,6 @@ class BaseInput:
 
             :param options: The options to apply to the input (will use default if None)
         """
-
 
         self.options = self.option_class() if options is None else options
         self._override_input = None
