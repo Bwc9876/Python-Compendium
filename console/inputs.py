@@ -430,6 +430,9 @@ class SelectionInput(BaseInput):
 
         return self._invoke(prompt, choices, *args, **kwargs)
 
+    def _validate(self, raw_str: str) -> None:
+        pass
+
     def _show_list(self, items: list[object]) -> str:
         output_string = '\n'.join([self.options.item_formatter(index, item) for index, item in enumerate(items)])
         if self._override_print is None:
@@ -452,7 +455,7 @@ class SelectionInput(BaseInput):
         self._show_list(choices)
         selection: int
         result, selection = numeric_input(prompt)
-        return result, selection - 1
+        return result, None if selection is None else (selection - 1)
 
     def setup_testing(self, input_func: callable, print_func: callable):
         super().setup_testing(input_func, print_func)

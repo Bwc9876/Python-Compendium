@@ -8,6 +8,17 @@ from enum import IntEnum
 from dataclasses import dataclass
 
 
+__all__ = [
+    'ConsoleColorMode',
+    'COLOR_MODE',
+    'ConsoleTextStyle',
+    'FourBitConsoleColors',
+    'color_text',
+    'reset_format',
+    'progressbar'
+]
+
+
 class ConsoleColorMode(IntEnum):
     FOUR_BIT = 0
     EIGHT_BIT = 1
@@ -94,13 +105,18 @@ def handle_color(color_type, style: ConsoleTextStyle, mode):
 
 def color_text(in_str: str, style: ConsoleTextStyle, reset=True, override_color_mode=None):
     """
-        Colors the given string according to the provided :class:ConsoleTextStyle
+        Colors the given string according to the provided :py:class:`ConsoleTextStyle`
 
+        :param reset: Whether to reset the formatting after the string
+        :type reset: bool
+        :param override_color_mode: Overrides the COLOR_MODE global option
+        :type override_color_mode: ConsoleColorMode
         :param in_str: The string to color
         :type in_str: str
         :param style: The style to apply
         :type style: ConsoleTextStyle
     """
+
     if style is None:
         return in_str
     else:
