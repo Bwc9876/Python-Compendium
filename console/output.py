@@ -3,17 +3,19 @@
 """
 
 import sys
+from enum import Enum
 from dataclasses import dataclass
 
-__all__ = [
-    'ConsoleColors',
-    'ConsoleTextStyle',
-    'color_text',
-    'progressbar'
-]
+
+class ConsoleColorMode(Enum):
+    FOUR_BIT = 0
+    EIGHT_BIT = 1
+    RGB = 2
+
+COLOR_MODE = ConsoleColorMode.EIGHT_BIT
 
 
-class ConsoleColors:
+class ConsoleColors(Enum):
     """
         Use this static class to select colors in :class:ConsoleTextStyle
     """
@@ -26,6 +28,7 @@ class ConsoleColors:
     PURPLE = 5
     CYAN = 6
     WHITE = 7
+
 
 
 @dataclass
@@ -41,12 +44,49 @@ class ConsoleTextStyle:
         :type high_itensity: bool
     """
 
-    color: int
-    bold: bool
-    high_intensity: bool
+    fg_color: int|tuple[int]
+    bg_color: int|tuple[int]
+    bold: bool = False
+    underline: bool = False
+    overline: bool = False
+    invert: bool = False
+    blink: bool = False
+    high_intensity = False
+
+    def get_flags(self):
+        return (self.bold, self.underline, self.overline, self.invert, self.blink)
 
 
-def color_text(in_str: str, style: ConsoleTextStyle):
+flag_codes = (
+    (1, None),
+    (4, 24),
+    (53, 55),
+    (7, 27),
+    (5, 25),
+)
+
+# \033[color;bg;flagsmMESSAGE\033[0m
+
+
+def handle_flags(style):
+    flags = style.get_flags()
+    flag_String = ""
+    for flag, possible in enumerate(flag_codes):
+        if flags[flag] is True and possible[0] is not None:
+            flag_string += f"{possible[0]};"
+        elif flags[flag] is False and possible[1] is not None:
+            flag_string += f"{possible[1]};"
+    return flag_string
+            
+def handle_color(color_type, style, mode):
+    color = style.fg_Color if color_type == 0 else style.bg_color
+    if style.color is None:
+        return ""
+    else:
+        if mode == ConsoleColorMode.RGB:
+            return str(38 id color_type == 0 else 48) + f";2;{color[0]};{color[1]};{color[2]};"
+
+def color_text(in_str: str, style: ConsoleTextStyle, reset=True, override_color_mode=None):
     """
         Colors the given string according to the provided :class:ConsoleTextStyle
 
@@ -58,7 +98,12 @@ def color_text(in_str: str, style: ConsoleTextStyle):
     if style is None:
         return in_str
     else:
-        return f"\033[{1 if style.bold else 0};{9 if style.high_intensity else 3}{style.color}m" + in_str + "\033[0m"
+        if override_color_mode is None:
+            color_mode = COLOR_MODE
+        else:
+            color_mode = override_color_mode
+        command_sequence = "\033["
+
 
 
 def progressbar(it, prefix="", size=60):
