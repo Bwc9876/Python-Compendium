@@ -237,7 +237,7 @@ class BaseInput:
 
     option_class = BaseInputOptions
 
-    def __init__(self, options=None):
+    def __init__(self, options=None, *args, **kwargs):
         """
             Initializes the input with the given options
 
@@ -249,7 +249,7 @@ class BaseInput:
         self._override_input = None
         self._override_print = None
 
-    def __call__(self, prompt: str) -> tuple[InputResult, object]:
+    def __call__(self, prompt: str, *args, **kwargs):
         """
             Prompt the user with the given prompt, then get the result and the input back
 
@@ -259,7 +259,7 @@ class BaseInput:
             :rtype: tuple[InputResult, object]
         """
 
-        return self._invoke(prompt)
+        return self._invoke(prompt, *args, **kwargs)
 
     def _show_prompt(self, prompt_string: str) -> str:
         prompt_string = prompt_string + self.options.suffix
@@ -283,7 +283,7 @@ class BaseInput:
     def _sanitize(self, raw_str: str) -> object:
         return raw_str
 
-    def _main_loop(self, prompt: str):
+    def _main_loop(self, prompt: str, *args, **kwargs):
         raw_input = self._show_prompt(prompt)
         if raw_input in self.options.cancel_codes:
             return InputResult.CANCEL, None
@@ -298,7 +298,7 @@ class BaseInput:
                 else:
                     return InputResult.ERROR, None
 
-    def _invoke(self, prompt: str):
+    def _invoke(self, prompt: str, *args, **kwargs):
         output_code = None
         output = None
         while output_code is None or output_code == InputResult.CONTINUE:
@@ -382,9 +382,9 @@ class BooleanInput(StringInput):
     option_class = BooleanInputOptions
     options: BooleanInputOptions = None
 
-    def __init__(self, options: BooleanInputOptions):
+    def __init__(self, options: BooleanInputOptions, *args, **kwargs):
         options.errors.update({key: options.errors['invalid'] for key in options.errors.keys() if key != 'empty'})
-        super(BooleanInput, self).__init__(options)
+        super(BooleanInput, self).__init__(options, *args, **kwargs)
 
     def _sanitize(self, raw_str) -> object:
         return True if raw_str.lower() == self.options.affirmative.lower() else False
@@ -394,12 +394,12 @@ class BooleanInput(StringInput):
         if raw_str.lower() != self.options.affirmative.lower() and raw_str.lower() != self.options.negative.lower():
             self._invalidate('invalid')
 
-    def _invoke(self, prompt: str):
+    def _invoke(self, prompt: str, *args, **kwargs):
         prompt += self.options.hint_format.format(affirmative=self.options.affirmative, negative=self.options.negative)
         return super(BooleanInput, self)._invoke(prompt)
 
 
-class SelectionInput:
+class SelectionInput(BaseInput):
     """
         Used to have the user select from a list of values
     """
@@ -407,19 +407,17 @@ class SelectionInput:
     option_class = SelectionInputOptions
     options: SelectionInputOptions = None
 
-    def __init__(self, options):
+    def __init__(self, options, *args, **kwargs):
         """
             Initializes the input with the given options
 
             :param options: The options to apply to the input (will use default if None)
         """
 
-        self.options = self.option_class() if options is None else options
-        self._override_input = None
-        self._override_print = None
+        super().__init__(options, *args, **kwargs)
         self._test_mode = False
 
-    def __call__(self, prompt: str, choices: list[object]):
+    def __call__(self, prompt: str, choices: list[object], *args, **kwargs):
         """
             Prompt the user with the given prompt, then get the result and the input back
 
@@ -431,7 +429,7 @@ class SelectionInput:
             :rtype: tuple[InputResult, object] 
         """
 
-        return self._invoke(prompt, choices)
+        return self._invoke(prompt, choices, *args, **kwargs)
 
     def _show_list(self, items: list[object]) -> str:
         output_string = '\n'.join([self.options.item_formatter(index, item) for index, item in enumerate(items)])
@@ -447,7 +445,7 @@ class SelectionInput:
                                    suffix=self.options.suffix, cancel_codes=self.options.cancel_codes,
                                    styles=self.options.styles)
 
-    def _invoke(self, prompt: str, choices: list[object]):
+    def _invoke(self, prompt: str, choices: list[object], *args, **kwargs):
         numeric_options = self._generate_numeric_options(len(choices))
         numeric_input = NumericInput(numeric_options)
         if self._test_mode:
@@ -458,16 +456,5 @@ class SelectionInput:
         return result, selection - 1
 
     def setup_testing(self, input_func: callable, print_func: callable):
-        """
-            Sets up this input for testing instead of production-use
-
-            :param input_func: The function to run instead of input() when prompting the "user"
-            :type input_func: callable[str] -> str
-            :param print_func: The function to run instead of print() when outputting to the "user"
-            :type print_func: callable[str] -> None
-        """
-
-        self._override_input = input_func
-        self._override_print = print_func
-        self.options.recurring = False
+        super().setup_testing(input_func, print_func)
         self._test_mode = True
