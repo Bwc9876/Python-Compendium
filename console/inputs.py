@@ -5,7 +5,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
-from console.output import FourBitConsoleColors, ConsoleTextStyle, color_text
+from console.output import FourBitConsoleColors, ConsoleTextStyle, color_text, reset_format
 
 
 class ValidationError(Exception):
@@ -49,6 +49,7 @@ class InputResult(Enum):
 
 DEFAULT_STYLES = {
     'prompt': ConsoleTextStyle(FourBitConsoleColors.BLUE, bold=True),
+    'input': ConsoleTextStyle(FourBitConsoleColors.CYAN, bold=False),
     'error': ConsoleTextStyle(FourBitConsoleColors.RED, bold=True)
 }
 
@@ -56,6 +57,12 @@ DEFAULT_SELECTION_STYLES = {
     'list': ConsoleTextStyle(FourBitConsoleColors.BLUE, bold=False)
 }
 DEFAULT_SELECTION_STYLES.update(DEFAULT_STYLES)
+
+DEFAULT_LIST_STYLES = {
+    'item-prompt': ConsoleTextStyle(FourBitConsoleColors.BLUE, bold=False),
+    'item-input': ConsoleTextStyle(FourBitConsoleColors.CYAN, bold=False)
+}
+DEFAULT_LIST_STYLES.update(DEFAULT_STYLES)
 
 # Default Error Messages
 
@@ -77,7 +84,6 @@ NUMERIC_DEFAULT_ERRORS = {
 }
 NUMERIC_DEFAULT_ERRORS.update(STRING_DEFAULT_ERRORS)
 
-
 BOOLEAN_DEFAULT_ERRORS = {
     'invalid': "Invalid choice",
     'empty': "Please enter a value"
@@ -86,6 +92,10 @@ BOOLEAN_DEFAULT_ERRORS = {
 SELECTION_DEFAULT_ERRORS = {
     'invalid': "Invalid choice",
     'empty': "Please select an option"
+}
+
+LIST_DEFAULT_ERRORS = {
+    'not-enough': "Not enough items",
 }
 
 
@@ -128,6 +138,11 @@ def default_list_format(index: int, in_str: object) -> str:
 
     raw_str = str(in_str)
     return (str(index + 1) + '. ') + (raw_str[0].upper() + raw_str[1:])
+
+
+def default_list_validation(raw_str: str, invalidate: callable):
+    if len(raw_str) == 0:
+        invalidate("Please enter a value")
 
 
 # Input Options
@@ -216,13 +231,24 @@ class SelectionInputOptions(BaseInputOptions):
     """
         Represents options for a :py:class:`SelectionInput`
 
-        :ivar item_formatter: A function that takes an item and formats it to display in the list, it gets the index of the item and the item itself and is expected to retunr the newly formatted string
+        :ivar item_formatter: A function that takes an item and formats it to display in the list, it gets the index of the item and the item itself and is expected to return a string
         :type item_formatter: callable[int, object] -> str
     """
 
-    item_formatter: callable = field(default_factory=lambda:  default_list_format)
-    errors: dict = field(default_factory=lambda:  SELECTION_DEFAULT_ERRORS)
+    item_formatter: callable = field(default_factory=lambda: default_list_format)
+    errors: dict = field(default_factory=lambda: SELECTION_DEFAULT_ERRORS)
     styles: dict = field(default_factory=lambda: DEFAULT_SELECTION_STYLES)
+
+
+@dataclass
+class ListInputOptions(BaseInputOptions):
+    minimum_amount: int = 1
+    maximum_amount: int = None
+    validation_function: callable = field(default_factory=lambda: default_list_validation)
+    item_format_string: str = "{current}/{maximum}"
+    errors: dict = field(default_factory=lambda: LIST_DEFAULT_ERRORS)
+    styles: dict = field(default_factory=lambda: DEFAULT_LIST_STYLES)
+    stop_codes: tuple = field(default_factory=lambda: ('stop', 'done'))
 
 
 # Inputs
@@ -260,10 +286,15 @@ class BaseInput:
 
         return self._invoke(prompt, *args, **kwargs)
 
-    def _show_prompt(self, prompt_string: str) -> str:
+    def _colored_input(self, prompt: str, prompt_style: ConsoleTextStyle, input_style: ConsoleTextStyle):
+        entered = input(color_text(prompt, prompt_style) + color_text("", input_style, reset=False))
+        reset_format()
+        return entered
+
+    def _show_prompt(self, prompt_string: str, prompt_style: ConsoleTextStyle, input_style: ConsoleTextStyle) -> str:
         prompt_string = prompt_string + self.options.suffix
         if self._override_input is None:
-            return input(color_text(prompt_string, self.options.styles.get('prompt')))
+            return self._colored_input(prompt_string, prompt_style, input_style)
         else:
             return self._override_input(prompt_string)
 
@@ -282,8 +313,8 @@ class BaseInput:
     def _sanitize(self, raw_str: str) -> object:
         return raw_str
 
-    def _main_loop(self, prompt: str, *args, **kwargs):
-        raw_input = self._show_prompt(prompt)
+    def _main_loop(self, prompt: str, prompt_style: ConsoleTextStyle, input_style: ConsoleTextStyle, *args, **kwargs):
+        raw_input = self._show_prompt(prompt, prompt_style, input_style)
         if raw_input in self.options.cancel_codes:
             return InputResult.CANCEL, None
         else:
@@ -301,7 +332,7 @@ class BaseInput:
         output_code = None
         output = None
         while output_code is None or output_code == InputResult.CONTINUE:
-            output_code, output = self._main_loop(prompt)
+            output_code, output = self._main_loop(prompt, self.options.styles['prompt'], self.options.styles['input'])
         return output_code, output
 
     def setup_testing(self, input_func: callable, print_func: callable) -> None:
@@ -396,6 +427,46 @@ class BooleanInput(StringInput):
     def _invoke(self, prompt: str, *args, **kwargs):
         prompt += self.options.hint_format.format(affirmative=self.options.affirmative, negative=self.options.negative)
         return super(BooleanInput, self)._invoke(prompt)
+
+
+class ListInput(BaseInput):
+    option_class = ListInputOptions
+    options: ListInputOptions = None
+
+    def list_invalidate(self, message):
+        raise ValidationError(message)
+
+    def _validate(self, raw_str: str) -> None:
+        self.options.validation_function(raw_str, self.list_invalidate)
+
+    def __call__(self, prompt: str, *args, **kwargs):
+        return self._invoke(prompt)
+
+    def _invoke(self, prompt: str, *args, **kwargs):
+        if self._override_print is None:
+            print(color_text(prompt + self.options.suffix, self.options.styles['prompt']))
+        else:
+            self._override_print(prompt + self.options.suffix)
+        output_list = []
+        output_code = None
+        while output_code is None:
+            item_prompt = self.options.item_format_string.format(current=len(output_list) + 1,
+                                                                 maximum='∞' if self.options.maximum_amount is None else self.options.maximum_amount)
+            item_code, item = self._main_loop(item_prompt, self.options.styles['item-prompt'],
+                                              self.options.styles['item-input'])
+            if item_code == InputResult.SUCCESS:
+                if item.lower() in self.options.stop_codes:
+                    if len(output_list) < self.options.minimum_amount:
+                        self._show_error(self.options.errors.get('not-enough', "Unknown Error"))
+                    else:
+                        output_code = InputResult.SUCCESS
+                else:
+                    output_list.append(item)
+                if len(output_list) == self.options.maximum_amount:
+                    output_code = InputResult.SUCCESS
+            elif item_code == InputResult.CANCEL:
+                output_code = InputResult.CANCEL
+        return output_code, output_list
 
 
 class SelectionInput(BaseInput):

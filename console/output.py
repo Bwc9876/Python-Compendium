@@ -103,7 +103,7 @@ def handle_color(color_type, style: ConsoleTextStyle, mode):
             return str(38 if color_type == 0 else 48) + ';5;' + str(color) + ";"
 
 
-def color_text(in_str: str, style: ConsoleTextStyle, reset=True, override_color_mode=None):
+def color_text(in_str: str, style: ConsoleTextStyle, reset: bool = True, override_color_mode: ConsoleColorMode = None):
     """
         Colors the given string according to the provided :py:class:`ConsoleTextStyle`
 
