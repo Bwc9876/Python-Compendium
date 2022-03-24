@@ -2,8 +2,11 @@
     A set of classes that can be used to build interactive prompts
 """
 
+import os
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Callable
 
 from console.output import FourBitConsoleColors, ConsoleTextStyle, color_text, reset_format
 
@@ -98,6 +101,12 @@ LIST_DEFAULT_ERRORS = {
     'not-enough': "Not enough items",
 }
 
+FILE_DEFAULT_ERRORS = {
+    'file-not-found': "Cannot find '{file_path}'",
+    'file-exists': "'{file_path}' already exists",
+    'perm-error': "Insufficient permissions to {mode}"
+}
+
 
 # Utilities
 
@@ -170,6 +179,7 @@ class BaseInputOptions:
     suffix: str = ": "
     recurring: bool = True
     cancel_codes: tuple = ('!', '~')
+    additional_validation: Callable[[str, Callable[[str], None]], None] = lambda raw_str, invalidate: None
 
 
 @dataclass
@@ -223,7 +233,7 @@ class BooleanInputOptions(StringInputOptions):
     affirmative: str = 'Y'
     negative: str = 'N'
     hint_format: str = ' ({affirmative}/{negative})'
-    errors: dict = field(default_factory=lambda:  BOOLEAN_DEFAULT_ERRORS)
+    errors: dict = field(default_factory=lambda: BOOLEAN_DEFAULT_ERRORS)
 
 
 @dataclass
@@ -249,6 +259,14 @@ class ListInputOptions(BaseInputOptions):
     errors: dict = field(default_factory=lambda: LIST_DEFAULT_ERRORS)
     styles: dict = field(default_factory=lambda: DEFAULT_LIST_STYLES)
     stop_codes: tuple = field(default_factory=lambda: ('stop', 'done'))
+
+
+@dataclass
+class FileInputOptions(BaseInputOptions):
+    errors: dict = field(default_factory=lambda: FILE_DEFAULT_ERRORS)
+    require_exists: bool = True
+    exists_ok: bool = False
+    required_perms: int | None = None
 
 
 # Inputs
@@ -307,6 +325,9 @@ class BaseInput:
     def _invalidate(self, message_code: str, **kwargs) -> None:
         raise ValidationError(self.options.errors.get(message_code, "Unknown Error").format(**kwargs))
 
+    def _invalidate_without_code(self, message: str) -> None:
+        raise ValidationError(message)
+
     def _validate(self, raw_str: str) -> None:
         raise NotImplementedError(f"Validation not implemented for {self.__class__.__name__}")
 
@@ -320,6 +341,7 @@ class BaseInput:
         else:
             try:
                 self._validate(raw_input)
+                self.options.additional_validation(raw_input, self._invalidate_without_code)
                 return InputResult.SUCCESS, self._sanitize(raw_input)
             except ValidationError as error:
                 if self.options.recurring:
@@ -430,6 +452,10 @@ class BooleanInput(StringInput):
 
 
 class ListInput(BaseInput):
+    """
+        Used to prompt the user for a series of items
+    """
+
     option_class = ListInputOptions
     options: ListInputOptions = None
 
@@ -484,7 +510,7 @@ class SelectionInput(BaseInput):
             :param options: The options to apply to the input (will use default if None)
         """
 
-        super().__init__(options, *args, **kwargs)
+        super(SelectionInput, self).__init__(options, *args, **kwargs)
         self._test_mode = False
 
     def __call__(self, prompt: str, choices: list[object], *args, **kwargs):
@@ -531,3 +557,40 @@ class SelectionInput(BaseInput):
     def setup_testing(self, input_func: callable, print_func: callable):
         super().setup_testing(input_func, print_func)
         self._test_mode = True
+
+
+class FileInput(BaseInput):
+    """
+        Used to have the user select a file
+    """
+
+    options: FileInputOptions
+    option_class = FileInputOptions
+
+    PERM_ERRS = ['exists', 'execute', 'write', '', 'read']
+
+    def _validate(self, raw_str: str) -> None:
+        p = Path(raw_str)
+        if self.options.require_exists and p.exists() is False:
+            self._invalidate('file-not-found', file_path=str(p.as_posix()))
+        if self.options.exists_ok is False and p.exists() is True:
+            self._invalidate('file-exists', file_path=str(p.as_posix()))
+        if self.options.required_perms is not None:
+            if self.options.required_perms == os.W_OK and p.exists() is False and os.access(p.parent, os.W_OK) is False:
+                self._invalidate('perm-error', mode=self.PERM_ERRS[self.options.required_perms])
+            elif self.options.required_perms != os.W_OK and os.access(p, self.options.required_perms) is False:
+                self._invalidate("perm-error", mode=self.PERM_ERRS[self.options.required_perms])
+
+    def _invoke(self, prompt: str, *args, **kwargs) -> tuple[InputResult, Path | None]:
+        results = list(super(FileInput, self)._invoke(prompt, *args, **kwargs))
+        results[1] = Path(results[1])
+        return tuple(results)
+
+
+TYPE_MAPPINGS = {
+    'str': StringInput(StringInputOptions()),
+    'int': NumericInput(NumericInputOptions(allow_floats=False)),
+    'float': NumericInput(NumericInputOptions()),
+    'bool': BooleanInput(BooleanInputOptions()),
+    'Path': FileInput(FileInputOptions(require_exists=True, exists_ok=True, required_perms=os.R_OK))
+}
