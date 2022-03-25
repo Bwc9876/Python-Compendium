@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from re import fullmatch
 from typing import Callable
 
 from console.output import FourBitConsoleColors, ConsoleTextStyle, color_text, reset_format
@@ -15,7 +16,7 @@ class ValidationError(Exception):
     """
         Represents some sort of error in the data the user entered
 
-        :ivar message: The message to show the user
+        :cvar message: The message to show the user
         :type message: str
     """
 
@@ -75,7 +76,9 @@ STRING_DEFAULT_ERRORS = {
     'too-short': "Must be at least {min} characters",
     'empty': "Value cannot be empty",
     'not-equal': "Must have {amount} characters",
-    'not-between': "Must be at least {min} and at most {max} characters"
+    'not-between': "Must be at least {min} and at most {max} characters",
+    'invalid-char': "The character: '{c}' is not allowed!",
+    'pattern': "Invalid format"
 }
 
 NUMERIC_DEFAULT_ERRORS = {
@@ -149,7 +152,7 @@ def default_list_format(index: int, in_str: object) -> str:
     return (str(index + 1) + '. ') + (raw_str[0].upper() + raw_str[1:])
 
 
-def default_list_validation(raw_str: str, invalidate: callable):
+def default_list_validation(raw_str: str, invalidate: Callable[[str], None]):
     if len(raw_str) == 0:
         invalidate("Please enter a value")
 
@@ -162,15 +165,15 @@ class BaseInputOptions:
     """
         Represents options that apply to all inputs
 
-        :ivar errors: The messages to show when the user enters invalid information
+        :cvar errors: The messages to show when the user enters invalid information
         :type errors: dict
-        :ivar styles: The :py:class:`ConsoleTextStyle` to apply
+        :cvar styles: The :py:class:`ConsoleTextStyle` to apply
         :type styles: dict
-        :ivar suffix: A string that is put directly after the prompt
+        :cvar suffix: A string that is put directly after the prompt
         :type suffix: str
-        :ivar recurring: If the user makes an error, should we keep prompting them?
+        :cvar recurring: If the user makes an error, should we keep prompting them?
         :type recurring: bool
-        :ivar cancel_codes: If the user enters any of these values, the input will be cancelled
+        :cvar cancel_codes: If the user enters any of these values, the input will be cancelled
         :type cancel_codes: tuple[str]
     """
 
@@ -187,14 +190,16 @@ class StringInputOptions(BaseInputOptions):
     """
         Represents options for a :py:class:`StringInput`
 
-        :ivar minimum_length: The minimum length that the input has to be (inclusive)
+        :cvar minimum_length: The minimum length that the input has to be (inclusive)
         :type minimum_length: int
-        :ivar maximum_length: The maximum length that the input can to be (inclusive)
+        :cvar maximum_length: The maximum length that the input can to be (inclusive)
         :type maximum_length: int
     """
 
     minimum_length: int = 1
     maximum_length: int = None
+    banned_chars: tuple = None
+    pattern: str = None
     errors: dict = field(default_factory=lambda: STRING_DEFAULT_ERRORS)
 
 
@@ -203,11 +208,11 @@ class NumericInputOptions(StringInputOptions):
     """
         Represents options for a :py:class:`NumericInput`
 
-        :ivar minimum: The minimum value that can be entered
+        :cvar minimum: The minimum value that can be entered
         :type minimum: float
-        :ivar maximum: The maximum value that can be entered
+        :cvar maximum: The maximum value that can be entered
         :type maximum: float
-        :ivar allow_floats: Whether decimal-point numbers can be entered
+        :cvar allow_floats: Whether decimal-point numbers can be entered
         :type allow_floats: bool
     """
 
@@ -222,11 +227,11 @@ class BooleanInputOptions(StringInputOptions):
     """
         Represents options for a :py:class:`BooleanInput`
 
-        :ivar affirmative: The value the user needs to enter to say 'yes'
+        :cvar affirmative: The value the user needs to enter to say 'yes'
         :type affirmative: str
-        :ivar negative: The value the user needs to enter to say 'no'
+        :cvar negative: The value the user needs to enter to say 'no'
         :type negative: str
-        :ivar hint_format: How the hint (ex: "({affirmative}/{negative})") will be displayed
+        :cvar hint_format: How the hint (ex: "({affirmative}/{negative})") will be displayed
         :type hint_format: str
     """
 
@@ -241,7 +246,7 @@ class SelectionInputOptions(BaseInputOptions):
     """
         Represents options for a :py:class:`SelectionInput`
 
-        :ivar item_formatter: A function that takes an item and formats it to display in the list, it gets the index of the item and the item itself and is expected to return a string
+        :cvar item_formatter: A function that takes an item and formats it to display in the list, it gets the index of the item and the item itself and is expected to return a string
         :type item_formatter: callable[int, object] -> str
     """
 
@@ -266,7 +271,7 @@ class FileInputOptions(BaseInputOptions):
     errors: dict = field(default_factory=lambda: FILE_DEFAULT_ERRORS)
     require_exists: bool = True
     exists_ok: bool = False
-    required_perms: int | None = None
+    required_perms: int = None
 
 
 # Inputs
@@ -276,7 +281,7 @@ class BaseInput:
     """
         Used as a base for all other input types
 
-        :ivar options: the options for this input
+        :cvar options: the options for this input
     """
 
     option_class = BaseInputOptions
@@ -341,6 +346,7 @@ class BaseInput:
         else:
             try:
                 self._validate(raw_input)
+                # noinspection PyArgumentList
                 self.options.additional_validation(raw_input, self._invalidate_without_code)
                 return InputResult.SUCCESS, self._sanitize(raw_input)
             except ValidationError as error:
@@ -357,7 +363,7 @@ class BaseInput:
             output_code, output = self._main_loop(prompt, self.options.styles['prompt'], self.options.styles['input'])
         return output_code, output
 
-    def setup_testing(self, input_func: callable, print_func: callable) -> None:
+    def setup_testing(self, input_func: Callable[[str], str], print_func: Callable[[str], None]) -> None:
         """
             Sets up this input for testing instead of production-use
 
@@ -392,6 +398,15 @@ class StringInput(BaseInput):
                                  min=self.options.minimum_length)
             elif error == 'gt':
                 self._invalidate('too-long', max=self.options.maximum_length)
+
+        if self.options.banned_chars is not None:
+            for c in raw_str:
+                if c in self.options.banned_chars:
+                    self._invalidate('invalid-char', c=c)
+
+        if self.options.pattern is not None:
+            if not fullmatch(self.options.pattern, raw_str):
+                self._invalidate('pattern')
 
 
 class NumericInput(StringInput):
@@ -581,7 +596,7 @@ class FileInput(BaseInput):
             elif self.options.required_perms != os.W_OK and os.access(p, self.options.required_perms) is False:
                 self._invalidate("perm-error", mode=self.PERM_ERRS[self.options.required_perms])
 
-    def _invoke(self, prompt: str, *args, **kwargs) -> tuple[InputResult, Path | None]:
+    def _invoke(self, prompt: str, *args, **kwargs) -> tuple[InputResult, Path]:
         results = list(super(FileInput, self)._invoke(prompt, *args, **kwargs))
         results[1] = Path(results[1])
         return tuple(results)
@@ -594,3 +609,5 @@ TYPE_MAPPINGS = {
     'bool': BooleanInput(BooleanInputOptions()),
     'Path': FileInput(FileInputOptions(require_exists=True, exists_ok=True, required_perms=os.R_OK))
 }
+
+OPTIONS_MAPPINGS = {i.option_class: i for i in (StringInput, NumericInput, BooleanInput, ListInput, SelectionInput, FileInput)}

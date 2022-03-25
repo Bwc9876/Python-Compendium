@@ -1,4 +1,3 @@
-
 VOWELS = ('a', 'e', 'i', 'o', 'u', 'y')
 TRUE_VOWELS = tuple(VOWELS[:-1])
 
@@ -16,6 +15,7 @@ __all__ = [
     "cap_first_all",
     "title"
 ]
+
 
 def pluralize(word: str, plural_string="s", vowel_plural_string="es", y_plural_string="ies"):
     if word[-1].lower() in VOWELS:
@@ -35,7 +35,7 @@ def auto_plural(word: str, num: int):
 
 
 def number_of(items: list, name: str):
-    return len(items) + " " + (auto_plural(name, len(items)))
+    return str(len(items)) + " " + (auto_plural(name, len(items)))
 
 
 def list_items(items: list):
@@ -46,7 +46,7 @@ def list_items(items: list):
     else:
         string_list = [str(item) for item in items]
         string_list[-1] = "and " + string_list[-1]
-        return ', '.join(string_list)    
+        return ', '.join(string_list)
 
 
 def a_or_an(word: str, consider_acronyms=False):
@@ -72,6 +72,3 @@ def cap_first_all(phrase: str):
 
 def title(phrase: str):
     return ' '.join([cap_first_title(word.lower()) for word in phrase.split(" ")])
-
-
-
